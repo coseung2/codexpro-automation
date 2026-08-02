@@ -47,6 +47,11 @@ per-run profile and asks Oracle to hide its owned window. This isolates
 different projects: one completed run cannot close another run's live Chrome.
 Do not replace this with the shared manual-login profile.
 
+Live execution and response tracking must follow the `chatgpt-oracle-runtime`
+Codex Luna tracking worker contract. Exactly one `gpt-5.6-luna` worker owns the
+whole blocking live command; the main Codex session must not submit or poll the
+same run concurrently.
+
 Control state and final Oracle output are host-only below
 `%USERPROFILE%\.codex\state\chatgpt-oracle`. Complete requires exit zero and
 fresh nonempty host output. Recovery uses the stored slug:

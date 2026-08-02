@@ -69,6 +69,29 @@ adds a short grace for a wedged CDP call; if it expires, the runner returns
 `post_submit_watchdog_timeout`, preserves the exact process/session and browser
 evidence, and remains unsafe for a fresh submission.
 
+## Codex Luna tracking owner
+
+For every authorized live Web GPT command that may wait for a provider answer,
+delegate the entire blocking command before it starts to exactly one native
+Codex worker with `agent_type: "worker"`, `model: "gpt-5.6-luna"`,
+`reasoning_effort: "high"`, and `fork_context: false`. Give it a compact,
+self-contained capsule containing the exact command, manifest, project root,
+and explicit non-goals. That worker is the sole submission-and-wait owner.
+
+The main Codex session must not execute the same live command, poll its run
+directory, or launch another tracking worker while that owner is active. Wait
+through the native worker-wait mechanism and surface only changed terminal or
+attention-required evidence. For Web Multi or comprehensive mode, one Luna
+worker owns the whole parent command; do not create a tracking worker per lane
+or stage.
+
+If an exact run already exists, the tracking worker may use only the official
+exact-slug `live` or `harvest` recovery path. It must never resubmit, use
+`--force`, abandon or kill the run, edit state, or touch credentials and
+profiles. If the requested Luna model or worker facility is unavailable, do
+not silently substitute another model or let a second owner take over; report
+the limitation while preserving the exact run ownership.
+
 ## Recovery
 
 Recovery always reuses the stored Oracle slug and never restarts or submits:

@@ -92,6 +92,33 @@ def test_oracle_runs_use_isolated_profile_copies_and_owned_hidden_windows() -> N
     assert "hide its owned window" in value
 
 
+def test_live_web_gpt_tracking_has_one_exact_luna_worker_owner() -> None:
+    runtime = text(ORACLE)
+    normalized_runtime = " ".join(runtime.split())
+    for contract in (
+        'agent_type: "worker"',
+        'model: "gpt-5.6-luna"',
+        'reasoning_effort: "high"',
+        "fork_context: false",
+        "sole submission-and-wait owner",
+        "must not execute the same live command",
+        "must never resubmit",
+        "do not silently substitute another model",
+    ):
+        assert contract in normalized_runtime
+
+    for route in (THINKING, PRO, HANDOFF, MULTI, RESEARCH):
+        value = text(route)
+        normalized_value = " ".join(value.split())
+        assert "gpt-5.6-luna" in value
+        assert "tracking worker" in value
+        assert "main Codex session must not" in normalized_value
+
+    assert "one Luna worker owns the whole parent command" in normalized_runtime
+    assert "Do not create one tracking worker per lane" in text(MULTI)
+    assert "must not poll stages" in text(HANDOFF)
+
+
 def test_install_inventory_contains_new_active_runtime_and_keeps_legacy_recovery() -> None:
     manifest = json.loads((ROOT / "install-manifest.json").read_text(encoding="utf-8"))
     include = set(manifest["include"])

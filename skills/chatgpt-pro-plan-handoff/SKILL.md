@@ -74,6 +74,12 @@ source output SHA-256, recovery method, and strict parser error position.
 python "$env:USERPROFILE\.codex\bin\chatgpt_oracle_comprehensive.py" --manifest C:\project\workflow.json --dry-run
 ```
 
+After preview and live authorization, delegate the whole comprehensive runner
+command to exactly one `gpt-5.6-luna` tracking worker under the
+`chatgpt-oracle-runtime` contract. That one worker owns every sequential web
+stage and any Multi parent; the main Codex session must not poll stages or
+create a tracking worker per stage or lane.
+
 The review GPT owns plan repair and finalization. It does not merely list
 findings: it directly repairs every defect resolvable from the mission,
 DevSpace workspace, project rules, or available evidence, writes the corrected

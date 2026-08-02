@@ -30,6 +30,11 @@ launches use a short parent-scoped mutex. On Windows each lane uses a separate
 throwaway copy of the signed-in Oracle profile, preventing one solver from
 closing or taking over another solver's Chrome session.
 
+Delegate the whole blocking Multi parent command to exactly one
+`gpt-5.6-luna` tracking worker under the `chatgpt-oracle-runtime` contract.
+Do not create one tracking worker per lane: Oracle owns lane concurrency, and
+the main Codex session must not submit or poll the same parent concurrently.
+
 No attachments, app/settings automation, broad tab cleanup, `--force`,
 restart, or silent resubmission. Oracle owns one-shot tab archival. Existing
 agbrowse Multi state is recovery-only. CodexPro is frozen and is never a solver
