@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import threading
 import time
@@ -103,6 +104,11 @@ def test_process_disappearance_is_a_signal_after_grace(tmp_path: Path) -> None:
     )
     assert result["signal"] == "process_disappeared"
     assert result["oracle_process_alive"] is False
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows process API contract")
+def test_windows_process_probe_recognizes_current_process() -> None:
+    assert watcher.process_is_alive(os.getpid()) is True
 
 
 def test_timeout_is_explicit_and_does_not_mutate_state(tmp_path: Path) -> None:

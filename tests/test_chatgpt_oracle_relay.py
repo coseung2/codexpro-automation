@@ -181,12 +181,16 @@ def test_wake_uses_codex_exec_resume_with_prompt_on_stdin(
         captured["input"] = kwargs["input"]
         return Completed()
 
-    monkeypatch.setattr(relay, "_codex_executable", lambda: "codex.exe")
+    monkeypatch.setattr(
+        relay,
+        "_codex_invocation",
+        lambda arguments: ["codex-test", *arguments],
+    )
     monkeypatch.setattr(relay.subprocess, "run", fake_run)
     exit_code, _error = relay.wake_thread(payload, directory)
     assert exit_code == 0
     assert captured["command"] == [
-        "codex.exe", "exec", "resume", "--all", "--json", THREAD_ID, "-"
+        "codex-test", "exec", "resume", "--all", "--json", THREAD_ID, "-"
     ]
     assert b"ORACLE_EVENT_RELAY_WAKE" in captured["input"]
 

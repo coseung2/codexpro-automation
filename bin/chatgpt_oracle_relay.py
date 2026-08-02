@@ -195,12 +195,18 @@ def run_exact_watch(payload: dict[str, Any], _relay_dir: Path) -> dict[str, Any]
     return {"signal": signal, "command_exit_code": None}
 
 
-def _codex_executable() -> str:
+def _codex_invocation(arguments: Sequence[str]) -> list[str]:
     configured = os.environ.get("CODEX_CLI_PATH")
-    located = configured or shutil.which("codex.exe") or shutil.which("codex")
+    if os.name == "nt":
+        located = configured or shutil.which("codex.cmd") or shutil.which("codex")
+        if not located:
+            raise RelayError("Codex CLI executable is unavailable")
+        command_line = subprocess.list2cmdline([str(Path(located).resolve(strict=True)), *arguments])
+        return [os.environ.get("ComSpec") or "cmd.exe", "/d", "/s", "/c", command_line]
+    located = configured or shutil.which("codex")
     if not located:
         raise RelayError("Codex CLI executable is unavailable")
-    return str(Path(located).resolve(strict=True))
+    return [str(Path(located).resolve(strict=True)), *arguments]
 
 
 def wake_prompt(payload: dict[str, Any], relay_dir: Path) -> str:
@@ -221,15 +227,14 @@ def wake_prompt(payload: dict[str, Any], relay_dir: Path) -> str:
 
 
 def wake_thread(payload: dict[str, Any], relay_dir: Path) -> tuple[int, str]:
-    command = [
-        _codex_executable(),
+    command = _codex_invocation([
         "exec",
         "resume",
         "--all",
         "--json",
         str(payload["thread_id"]),
         "-",
-    ]
+    ])
     stderr_path = relay_dir / "wake.stderr.log"
     with (relay_dir / "wake.stdout.log").open("ab") as stdout:
         completed = subprocess.run(
