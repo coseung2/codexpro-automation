@@ -78,6 +78,8 @@ session must not submit or poll the same Pro run concurrently. The worker is
 signal-only and must not inspect attachments, Pro output contents, or review
 quality; the main Codex performs the actual review after the worker returns.
 Unchanged waits are silent and must not produce heartbeat commentary.
+An already-started exact run must be observed only through one blocking
+`chatgpt_oracle_watch.py` call from the runtime contract.
 
 Completion requires exact Oracle Pro model evidence, attachment evidence, exit
 zero, a fresh nonempty host-only `output.md`, immutable hashes, and a refreshed

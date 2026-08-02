@@ -96,12 +96,29 @@ attention-required evidence. For Web Multi or comprehensive mode, one Luna
 worker owns the whole parent command; do not create a tracking worker per lane
 or stage.
 
+When observing an already-started exact run, the worker must make exactly one
+blocking call to the installed deterministic watcher; model-authored polling,
+sleep loops, repeated shell calls, and direct Oracle notification assumptions
+are forbidden:
+
+```powershell
+python "$env:USERPROFILE\.codex\bin\chatgpt_oracle_watch.py" --run-dir C:\absolute\exact-run-dir --timeout-seconds 14400
+```
+
+Set the shell tool timeout longer than the watcher timeout. The watcher emits no
+unchanged output and returns one JSON signal for `complete`, `failed`,
+`attention_required`, `abandoned`, or confirmed Oracle-process disappearance.
+An `observer_timeout` is not an Oracle lifecycle signal: report that the worker
+runtime ended so the main task can attach exactly one successor to the same run.
+Never ask Luna to inspect Oracle desktop notifications; those notifications are
+not delivered to worker threads.
+
 Unchanged waits are silent. Keep the main turn open in native worker wait; do
 not emit heartbeat commentary such as "still running", "no signal yet", elapsed
 time, or unchanged-run summaries. A wait-window timeout is an internal control
 event: silently reissue wait for the same worker without reading the run in the
-main session. The tracking worker should use one blocking watcher/tool call
-where possible instead of a model-generated polling narration. Do not send a
+main session. The tracking worker must use the deterministic watcher call above
+instead of model-generated polling narration. Do not send a
 final answer merely because a worker was spawned. Output is allowed only for an
 actual terminal/attention transition, worker termination that requires one
 successor, or an explicit user status request; after a requested snapshot,

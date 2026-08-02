@@ -38,6 +38,8 @@ The worker is signal-only and must not inspect lane handoffs, merger output,
 project files, or result quality; the main Codex reviews them after return.
 Unchanged parent/lane waits are silent and must not produce heartbeat
 commentary.
+An already-started exact parent run must be observed only through one blocking
+`chatgpt_oracle_watch.py` call from the runtime contract.
 
 No attachments, app/settings automation, broad tab cleanup, `--force`,
 restart, or silent resubmission. Oracle owns one-shot tab archival. Existing

@@ -36,6 +36,7 @@
     "bin/chatgpt_oracle_compat.py",
     "bin/oracle-compat/",
     "bin/chatgpt_oracle_state.py",
+    "bin/chatgpt_oracle_watch.py",
     "bin/chatgpt_oracle_profiles.py",
     "bin/chatgpt_oracle_dispatch.py",
     "bin/chatgpt_oracle_multi.py",

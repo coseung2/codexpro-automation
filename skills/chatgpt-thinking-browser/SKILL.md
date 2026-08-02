@@ -54,6 +54,8 @@ same run concurrently. The worker is signal-only and must not inspect project
 files, GPT output contents, diffs, or test meaning; the main Codex performs all
 review and completion judgment after the worker returns. Unchanged waits are
 silent: keep native wait open and emit no heartbeat commentary.
+An already-started exact run must be observed only through one blocking
+`chatgpt_oracle_watch.py` call from the runtime contract.
 
 Control state and final Oracle output are host-only below
 `%USERPROFILE%\.codex\state\chatgpt-oracle`. Complete requires exit zero and

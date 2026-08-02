@@ -112,6 +112,10 @@ def test_live_web_gpt_tracking_has_one_exact_luna_worker_owner() -> None:
         "silently reissue wait for the same worker",
         "Do not send a final answer merely because a worker was spawned",
         "explicit user status request",
+        "chatgpt_oracle_watch.py",
+        "make exactly one blocking call",
+        "model-authored polling",
+        "notifications are not delivered to worker threads",
         "must never resubmit",
         "do not silently substitute another model",
     ):
@@ -127,6 +131,7 @@ def test_live_web_gpt_tracking_has_one_exact_luna_worker_owner() -> None:
         assert "main Codex session must not" in normalized_value
         assert "waits are silent" in normalized_value
         assert "heartbeat commentary" in normalized_value
+        assert "chatgpt_oracle_watch.py" in normalized_value
 
     assert "one Luna worker owns the whole parent command" in normalized_runtime
     assert "Do not create one tracking worker per lane" in text(MULTI)
@@ -140,6 +145,7 @@ def test_install_inventory_contains_new_active_runtime_and_keeps_legacy_recovery
         "bin/chatgpt_oracle_dispatch.py",
         "bin/chatgpt_oracle_multi.py",
         "bin/chatgpt_oracle_comprehensive.py",
+        "bin/chatgpt_oracle_watch.py",
         "skills/chatgpt-workspace-setup/SKILL.md",
     ):
         assert path in include

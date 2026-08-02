@@ -22,6 +22,8 @@ The main Codex session must not submit or poll the same research run
 concurrently. The worker is signal-only and must not inspect or evaluate the
 research output; the main Codex reviews the result after the worker returns.
 Unchanged waits are silent and must not produce heartbeat commentary.
+An already-started exact run must be observed only through one blocking
+`chatgpt_oracle_watch.py` call from the runtime contract.
 
 Do not silently replace Deep Research with ordinary search or Pro. Existing
 agbrowse Deep Research records may be recovered only by their exact old run
