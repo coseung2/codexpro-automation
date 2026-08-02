@@ -16,14 +16,11 @@ The compiled Oracle manifest uses `gpt-5.6`, model strategy `select`, Oracle
 attachment and performs no app picker or settings action. Remove `--dry-run`
 only for an explicitly authorized live run.
 
-Delegate the whole blocking live Deep Research command to exactly one
-`gpt-5.6-luna` tracking worker under the `chatgpt-oracle-runtime` contract.
-The main Codex session must not submit or poll the same research run
-concurrently. The worker is signal-only and must not inspect or evaluate the
-research output; the main Codex reviews the result after the worker returns.
-Unchanged waits are silent and must not produce heartbeat commentary.
-An already-started exact run must be observed only through one blocking
-`chatgpt_oracle_watch.py` call from the runtime contract.
+Register the whole blocking live Deep Research command with exactly one
+`chatgpt_oracle_relay.py` under the `chatgpt-oracle-runtime` zero-model relay
+contract, then end the current turn. Do not create a Luna tracking worker or
+keep Sol waiting. The relay resumes the same task after the research command
+exits; the main Codex reviews the result in that resumed turn.
 
 Do not silently replace Deep Research with ordinary search or Pro. Existing
 agbrowse Deep Research records may be recovered only by their exact old run

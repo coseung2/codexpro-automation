@@ -71,7 +71,8 @@ def test_immediate_terminal_signal_reports_metadata_without_reading_output(tmp_p
     assert "secret result" not in json.dumps(result)
 
 
-def test_waiter_wakes_on_attention_transition(tmp_path: Path) -> None:
+@pytest.mark.parametrize("_attempt", range(10))
+def test_waiter_wakes_on_attention_transition(tmp_path: Path, _attempt: int) -> None:
     run_dir = make_run(tmp_path)
 
     def transition() -> None:

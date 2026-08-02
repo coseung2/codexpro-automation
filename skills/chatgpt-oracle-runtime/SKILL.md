@@ -69,67 +69,52 @@ adds a short grace for a wedged CDP call; if it expires, the runner returns
 `post_submit_watchdog_timeout`, preserves the exact process/session and browser
 evidence, and remains unsafe for a fresh submission.
 
-## Codex Luna tracking owner
+## Zero-model event relay
 
-For every authorized live Web GPT command that may wait for a provider answer,
-delegate the entire blocking command before it starts to exactly one native
-Codex worker with `agent_type: "worker"`, `model: "gpt-5.6-luna"`,
-`reasoning_effort: "high"`, and `fork_context: false`. Give it a compact,
-self-contained capsule containing the exact command, manifest, project root,
-and explicit non-goals. That worker is the sole submission-and-wait owner.
+Never keep Sol, Luna, or another model turn open merely to wait for Oracle.
+Do not create a tracking worker, call native worker wait, narrate heartbeats, or
+schedule a model-backed polling automation. Hidden model output is still model
+usage and is forbidden for lifecycle observation.
 
-The Luna worker is a signal-only lifecycle observer, not a reviewer. It may
-launch the exact command, wait, and relay only runner-emitted lifecycle/status,
-exit code, exact run or workflow identity, and artifact paths or hashes. It
-must not open or read project files, mission contents, `output.md` or
-transcript contents, inspect Git diffs, run independent validation, interpret
-test meaning, assess answer quality, or decide that the user task is complete.
-If the exact parent command itself runs a deterministic gate, the worker
-reports only its exit/status signal. After the worker returns, the main Codex
-session reads the artifacts, inspects files and diffs, runs any required
-verification, and makes every review and completion decision.
-
-The main Codex session must not execute the same live command, poll its run
-directory, or launch another tracking worker while that owner is active. Wait
-through the native worker-wait mechanism and surface only changed terminal or
-attention-required evidence. For Web Multi or comprehensive mode, one Luna
-worker owns the whole parent command; do not create a tracking worker per lane
-or stage.
-
-When observing an already-started exact run, the worker must make exactly one
-blocking call to the installed deterministic watcher; model-authored polling,
-sleep loops, repeated shell calls, and direct Oracle notification assumptions
-are forbidden:
+After the synchronous dry-run passes and live execution is authorized, register
+the exact installed Oracle command with the local event relay. `CODEX_THREAD_ID`
+is supplied by Codex Desktop and binds the callback to the current task:
 
 ```powershell
-python "$env:USERPROFILE\.codex\bin\chatgpt_oracle_watch.py" --run-dir C:\absolute\exact-run-dir --timeout-seconds 14400
+python "$env:USERPROFILE\.codex\bin\chatgpt_oracle_relay.py" start-command `
+  --cwd C:\absolute\project-root -- `
+  python "$env:USERPROFILE\.codex\bin\chatgpt_oracle_dispatch.py" <exact-live-arguments>
 ```
 
-Set the shell tool timeout longer than the watcher timeout. The watcher emits no
-unchanged output and returns one JSON signal for `complete`, `failed`,
-`attention_required`, `abandoned`, or confirmed Oracle-process disappearance.
-An `observer_timeout` is not an Oracle lifecycle signal: report that the worker
-runtime ended so the main task can attach exactly one successor to the same run.
-Never ask Luna to inspect Oracle desktop notifications; those notifications are
-not delivered to worker threads.
+The relay accepts only installed allowlisted Oracle Python entrypoints, starts
+the command in an Oracle-owned hidden OS process, persists local relay state and
+logs, and returns immediately. After successful relay registration, end the
+current Codex turn; do not wait in the model. The background process consumes no
+model tokens while Oracle runs.
 
-Unchanged waits are silent. Keep the main turn open in native worker wait; do
-not emit heartbeat commentary such as "still running", "no signal yet", elapsed
-time, or unchanged-run summaries. A wait-window timeout is an internal control
-event: silently reissue wait for the same worker without reading the run in the
-main session. The tracking worker must use the deterministic watcher call above
-instead of model-generated polling narration. Do not send a
-final answer merely because a worker was spawned. Output is allowed only for an
-actual terminal/attention transition, worker termination that requires one
-successor, or an explicit user status request; after a requested snapshot,
-resume silent wait.
+When the Oracle command exits, the relay invokes `codex exec resume` for the
+bound task exactly once and sends only relay identity, exit code, and local
+evidence paths. That new turn is the first point at which a Codex model runs
+again. The main Codex task then reads the exact Oracle state and artifacts,
+inspects files and diffs, runs verification, and makes every quality and
+completion decision. Oracle's Windows toast is parallel user feedback from the
+same completion event; the relay does not scrape or trust toast text.
 
-If an exact run already exists, the tracking worker may use only the official
-exact-slug `live` or `harvest` recovery path. It must never resubmit, use
-`--force`, abandon or kill the run, edit state, or touch credentials and
-profiles. If the requested Luna model or worker facility is unavailable, do
-not silently substitute another model or let a second owner take over; report
-the limitation while preserving the exact run ownership.
+For an already-started exact run, register the deterministic state watcher
+through the same relay instead of holding a model turn open:
+
+```powershell
+python "$env:USERPROFILE\.codex\bin\chatgpt_oracle_relay.py" start-watch `
+  --cwd C:\absolute\project-root --run-dir C:\absolute\exact-run-dir
+```
+
+The low-level `chatgpt_oracle_watch.py` remains a no-model, metadata-only
+component used by `start-watch`; agents do not call it in a waiting tool turn.
+Exactly one relay may own a run or parent command. Never duplicate, resubmit,
+use `--force`, abandon or kill a run, edit state, or touch credentials and
+profiles. A relay registration or wake failure is persisted under
+`%USERPROFILE%\.codex\state\chatgpt-oracle\relays`; report it without falling
+back to Luna or model polling.
 
 ## Recovery
 

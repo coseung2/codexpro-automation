@@ -42,6 +42,8 @@ Oracle이 로그인된 ChatGPT 세션 실행
     ↓
 Oracle이 결과를 로컬 파일로 회수
     ↓
+무토큰 로컬 relay가 같은 Codex 작업을 다시 시작
+    ↓
 Codex가 해시·상태·최종 결정론적 테스트만 확인
 ```
 
@@ -183,6 +185,8 @@ python "$env:USERPROFILE\.codex\bin\chatgpt_oracle_dispatch.py" `
 - 브라우저나 로컬 프로세스 종료는 웹 작업 실패의 증거가 아닙니다.
 - 복구는 저장된 정확한 Oracle slug와 대화 URL만 사용하며 재제출하지 않습니다.
 - 완료에는 Oracle 종료 코드 0과 비어 있지 않은 새 결과 파일이 모두 필요합니다.
+- Oracle 대기 중에는 Sol/Luna 작업을 열어두지 않습니다. 로컬 event relay만
+  실행되며, 완료 이벤트가 발생한 뒤에만 같은 Codex 작업이 다시 모델을 호출합니다.
 
 정확한 실행을 회수하려면:
 

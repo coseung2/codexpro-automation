@@ -40,6 +40,7 @@ User request
        `-- Pro: mission + hash-frozen attachments
     -> web GPT explores, plans, edits, and tests
     -> Oracle saves the answer as a local artifact
+    -> a zero-token local relay resumes the same Codex task
     -> Codex checks identity, hashes, and one deterministic final gate
 ```
 
@@ -186,6 +187,8 @@ python "$env:USERPROFILE\.codex\bin\chatgpt_oracle_dispatch.py" `
 - Recovery uses only the persisted Oracle slug and exact conversation URL. It
   never resubmits the task.
 - Completion requires Oracle exit code zero and a fresh, nonempty durable output.
+- No Sol or Luna task remains open while Oracle runs. Only the local event relay
+  waits, and it invokes the model again after the completion event.
 
 Recover one exact run with:
 

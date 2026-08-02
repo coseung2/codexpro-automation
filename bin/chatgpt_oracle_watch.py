@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
 import sys
@@ -21,6 +22,75 @@ DEFAULT_TIMEOUT_SECONDS = 4 * 60 * 60
 
 class WatchError(RuntimeError):
     pass
+
+
+def load_state_shared(path: Path) -> dict[str, Any]:
+    """Read without blocking Oracle's atomic os.replace on Windows."""
+    if os.name != "nt":
+        return STATE.load_state(path)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [
+        ctypes.c_wchar_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+    ]
+    create_file.restype = ctypes.c_void_p
+    get_file_size = kernel32.GetFileSizeEx
+    get_file_size.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_longlong)]
+    get_file_size.restype = ctypes.c_int
+    read_file = kernel32.ReadFile
+    read_file.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.c_void_p,
+    ]
+    read_file.restype = ctypes.c_int
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [ctypes.c_void_p]
+    close_handle.restype = ctypes.c_int
+    handle = create_file(
+        str(path),
+        0x80000000,  # GENERIC_READ
+        0x00000001 | 0x00000002 | 0x00000004,  # SHARE_READ | WRITE | DELETE
+        None,
+        3,  # OPEN_EXISTING
+        0x00000080,  # FILE_ATTRIBUTE_NORMAL
+        None,
+    )
+    invalid_handle = ctypes.c_void_p(-1).value
+    if handle == invalid_handle:
+        raise OSError(ctypes.get_last_error(), f"cannot open state file: {path}")
+    try:
+        size = ctypes.c_longlong()
+        if not get_file_size(handle, ctypes.byref(size)):
+            raise OSError(ctypes.get_last_error(), f"cannot size state file: {path}")
+        if size.value < 0 or size.value > 16 * 1024 * 1024:
+            raise WatchError("state file size is outside the safe watcher bound")
+        buffer = ctypes.create_string_buffer(size.value)
+        read = ctypes.c_uint32()
+        if size.value and not read_file(
+            handle, buffer, size.value, ctypes.byref(read), None
+        ):
+            raise OSError(ctypes.get_last_error(), f"cannot read state file: {path}")
+        raw = bytes(buffer[: read.value]).decode("utf-8-sig", errors="strict")
+    finally:
+        close_handle(handle)
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise STATE.OracleStateError("STATE_JSON_INVALID", "state file is not valid JSON") from exc
+    if not isinstance(payload, dict) or payload.get("schema") != STATE.STATE_SCHEMA:
+        raise STATE.OracleStateError(
+            "STATE_SCHEMA_INVALID", f"state schema must be {STATE.STATE_SCHEMA}"
+        )
+    return payload
 
 
 def default_state_root() -> Path:
@@ -43,7 +113,7 @@ def resolve_exact_run_dir(run_dir: Path, *, state_root: Path) -> Path:
     if len(relative.parts) != 3 or relative.parts[1] != "runs":
         raise WatchError("run directory must have the exact <project>/runs/<run> shape")
     state_path = resolved / "state.json"
-    state = STATE.load_state(state_path)
+    state = load_state_shared(state_path)
     if str(state.get("run_id") or "") != resolved.name:
         raise WatchError("state run_id does not match the exact run directory")
     return resolved
@@ -127,7 +197,7 @@ def watch_run(
     last_state: dict[str, Any] | None = None
 
     while True:
-        state = STATE.load_state(state_path)
+        state = load_state_shared(state_path)
         last_state = state
         status = str(state.get("status") or "")
         pid = _process_pid(state)
@@ -143,7 +213,7 @@ def watch_run(
             elif missing_since is not None and now - missing_since >= process_grace_seconds:
                 # Re-read once after the grace window so a concurrent terminal
                 # state write always wins over process disappearance.
-                state = STATE.load_state(state_path)
+                state = load_state_shared(state_path)
                 status = str(state.get("status") or "")
                 if status in WAKE_STATUSES:
                     return build_signal(state, run_dir=run_dir, signal=status, pid_alive=False)

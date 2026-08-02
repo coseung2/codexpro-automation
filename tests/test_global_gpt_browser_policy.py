@@ -92,50 +92,40 @@ def test_oracle_runs_use_isolated_profile_copies_and_owned_hidden_windows() -> N
     assert "hide its owned window" in value
 
 
-def test_live_web_gpt_tracking_has_one_exact_luna_worker_owner() -> None:
+def test_live_web_gpt_waiting_uses_zero_model_event_relay() -> None:
     runtime = text(ORACLE)
     normalized_runtime = " ".join(runtime.split())
     for contract in (
-        'agent_type: "worker"',
-        'model: "gpt-5.6-luna"',
-        'reasoning_effort: "high"',
-        "fork_context: false",
-        "sole submission-and-wait owner",
-        "signal-only lifecycle observer, not a reviewer",
-        "must not open or read project files",
-        "`output.md` or transcript contents",
-        "inspect Git diffs",
-        "main Codex session reads the artifacts",
-        "must not execute the same live command",
-        "Unchanged waits are silent",
-        "do not emit heartbeat commentary",
-        "silently reissue wait for the same worker",
-        "Do not send a final answer merely because a worker was spawned",
-        "explicit user status request",
+        "Zero-model event relay",
+        "Never keep Sol, Luna, or another model turn open",
+        "Hidden model output is still model usage",
+        "CODEX_THREAD_ID",
+        "chatgpt_oracle_relay.py",
+        "start-command",
+        "end the current Codex turn",
+        "consumes no model tokens while Oracle runs",
+        "codex exec resume",
+        "first point at which a Codex model runs again",
+        "start-watch",
         "chatgpt_oracle_watch.py",
-        "make exactly one blocking call",
-        "model-authored polling",
-        "notifications are not delivered to worker threads",
-        "must never resubmit",
-        "do not silently substitute another model",
+        "Do not create a tracking worker",
+        "schedule a model-backed polling automation",
+        "does not scrape or trust toast text",
+        "without falling back to Luna or model polling",
     ):
         assert contract in normalized_runtime
 
     for route in (THINKING, PRO, HANDOFF, MULTI, RESEARCH):
         value = text(route)
         normalized_value = " ".join(value.split())
-        assert "gpt-5.6-luna" in value
-        assert "tracking worker" in value
-        assert "signal-only" in value
-        assert "must not inspect" in normalized_value
-        assert "main Codex session must not" in normalized_value
-        assert "waits are silent" in normalized_value
-        assert "heartbeat commentary" in normalized_value
-        assert "chatgpt_oracle_watch.py" in normalized_value
+        assert "chatgpt_oracle_relay.py" in normalized_value
+        assert "zero-model" in normalized_value
+        assert "end the current turn" in normalized_value
+        assert "keep Sol waiting" in normalized_value
+        assert "gpt-5.6-luna" not in value
 
-    assert "one Luna worker owns the whole parent command" in normalized_runtime
-    assert "Do not create one tracking worker per lane" in text(MULTI)
-    assert "must not poll stages" in text(HANDOFF)
+    assert "Do not create a Luna tracking worker per parent or lane" in " ".join(text(MULTI).split())
+    assert "poll stages" in text(HANDOFF)
 
 
 def test_install_inventory_contains_new_active_runtime_and_keeps_legacy_recovery() -> None:
@@ -146,6 +136,7 @@ def test_install_inventory_contains_new_active_runtime_and_keeps_legacy_recovery
         "bin/chatgpt_oracle_multi.py",
         "bin/chatgpt_oracle_comprehensive.py",
         "bin/chatgpt_oracle_watch.py",
+        "bin/chatgpt_oracle_relay.py",
         "skills/chatgpt-workspace-setup/SKILL.md",
     ):
         assert path in include

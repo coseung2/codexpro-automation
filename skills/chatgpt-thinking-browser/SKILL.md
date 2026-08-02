@@ -48,14 +48,10 @@ different projects: one completed run cannot close another run's live Chrome.
 Do not replace this with the shared manual-login profile.
 
 Live execution and response tracking must follow the `chatgpt-oracle-runtime`
-Codex Luna tracking worker contract. Exactly one `gpt-5.6-luna` worker owns the
-whole blocking live command; the main Codex session must not submit or poll the
-same run concurrently. The worker is signal-only and must not inspect project
-files, GPT output contents, diffs, or test meaning; the main Codex performs all
-review and completion judgment after the worker returns. Unchanged waits are
-silent: keep native wait open and emit no heartbeat commentary.
-An already-started exact run must be observed only through one blocking
-`chatgpt_oracle_watch.py` call from the runtime contract.
+zero-model event-relay contract. Register exactly one `chatgpt_oracle_relay.py`
+command and end the current turn; do not create a Luna tracking worker or keep
+Sol waiting. The relay resumes the same task only after the Oracle event. The
+main Codex performs all review and completion judgment in that resumed turn.
 
 Control state and final Oracle output are host-only below
 `%USERPROFILE%\.codex\state\chatgpt-oracle`. Complete requires exit zero and

@@ -51,6 +51,7 @@ def test_manifest_covers_runtime_and_schemas() -> None:
         'bin/chatgpt_web_multi_runtime.py',
         'bin/chatgpt_web_multi_upstream.py',
         'bin/chatgpt_oracle_watch.py',
+        'bin/chatgpt_oracle_relay.py',
         'bin/codexpro_agbrowse_app.py',
         'bin/codexpro_fixed_runtime_watchdog.py',
         'bin/codexpro_project_cloudflare_bootstrap.ps1',

@@ -72,14 +72,11 @@ Execute the compiled manifest only after a live Pro run was authorized:
 python "$env:USERPROFILE\.codex\skills\chatgpt-oracle-runtime\scripts\run_chatgpt_oracle.py" run --manifest C:\project\.ai-bridge\pro.json
 ```
 
-Delegate that whole blocking live command to exactly one `gpt-5.6-luna`
-tracking worker under the `chatgpt-oracle-runtime` contract. The main Codex
-session must not submit or poll the same Pro run concurrently. The worker is
-signal-only and must not inspect attachments, Pro output contents, or review
-quality; the main Codex performs the actual review after the worker returns.
-Unchanged waits are silent and must not produce heartbeat commentary.
-An already-started exact run must be observed only through one blocking
-`chatgpt_oracle_watch.py` call from the runtime contract.
+Register that whole blocking live command with exactly one
+`chatgpt_oracle_relay.py` under the `chatgpt-oracle-runtime` zero-model relay
+contract, then end the current turn. Do not create a Luna tracking worker or
+keep Sol waiting. The relay resumes the same task after the Pro command exits;
+the main Codex performs the actual review in that resumed turn.
 
 Completion requires exact Oracle Pro model evidence, attachment evidence, exit
 zero, a fresh nonempty host-only `output.md`, immutable hashes, and a refreshed

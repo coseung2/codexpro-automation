@@ -30,16 +30,12 @@ launches use a short parent-scoped mutex. On Windows each lane uses a separate
 throwaway copy of the signed-in Oracle profile, preventing one solver from
 closing or taking over another solver's Chrome session.
 
-Delegate the whole blocking Multi parent command to exactly one
-`gpt-5.6-luna` tracking worker under the `chatgpt-oracle-runtime` contract.
-Do not create one tracking worker per lane: Oracle owns lane concurrency, and
-the main Codex session must not submit or poll the same parent concurrently.
-The worker is signal-only and must not inspect lane handoffs, merger output,
-project files, or result quality; the main Codex reviews them after return.
-Unchanged parent/lane waits are silent and must not produce heartbeat
-commentary.
-An already-started exact parent run must be observed only through one blocking
-`chatgpt_oracle_watch.py` call from the runtime contract.
+Register the whole blocking Multi parent command with exactly one
+`chatgpt_oracle_relay.py` under the `chatgpt-oracle-runtime` zero-model relay
+contract, then end the current turn. Do not create a Luna tracking worker per
+parent or lane, poll lanes, or keep Sol waiting. Oracle owns lane concurrency;
+the relay resumes the same task after the parent exits and the main Codex
+reviews all results in that resumed turn.
 
 No attachments, app/settings automation, broad tab cleanup, `--force`,
 restart, or silent resubmission. Oracle owns one-shot tab archival. Existing

@@ -74,16 +74,12 @@ source output SHA-256, recovery method, and strict parser error position.
 python "$env:USERPROFILE\.codex\bin\chatgpt_oracle_comprehensive.py" --manifest C:\project\workflow.json --dry-run
 ```
 
-After preview and live authorization, delegate the whole comprehensive runner
-command to exactly one `gpt-5.6-luna` tracking worker under the
-`chatgpt-oracle-runtime` contract. That one worker owns every sequential web
-stage and any Multi parent; the main Codex session must not poll stages or
-create a tracking worker per stage or lane. The worker is signal-only and must
-not inspect stage artifacts, project files, diffs, or test meaning; the main
-Codex validates the workflow result after the worker returns. Unchanged stage
-waits are silent and must not produce heartbeat commentary.
-An already-started exact workflow run must be observed only through one
-blocking `chatgpt_oracle_watch.py` call from the runtime contract.
+After preview and live authorization, register the whole comprehensive parent
+command with exactly one `chatgpt_oracle_relay.py` under the
+`chatgpt-oracle-runtime` zero-model relay contract, then end the current turn.
+Do not create a Luna tracking worker, poll stages, or keep Sol waiting. The
+relay resumes the same task after the parent exits; the main Codex validates
+the workflow result in that resumed turn.
 
 The review GPT owns plan repair and finalization. It does not merely list
 findings: it directly repairs every defect resolvable from the mission,
