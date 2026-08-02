@@ -103,6 +103,20 @@ cd codexpro-automation
 The installer backs up replaced files and writes durable install receipts under
 `%USERPROFILE%\.codex\receipts`.
 
+### Install a fork on another PC
+
+A fork can be cloned and installed with the same commands. Distribute only the
+code and skills through Git; configure these machine-local items separately on
+each PC:
+
+- Tailscale sign-in and Funnel hostname
+- DevSpace allowed project roots and owner approval
+- The Oracle browser profile's ChatGPT sign-in
+
+Never commit or copy `%USERPROFILE%\.devspace\auth.json`, Oracle browser
+profiles, or `%USERPROFILE%\.codex\state\chatgpt-oracle`; they contain secrets
+or machine-local run state.
+
 ## One-time DevSpace setup
 
 You do not install one ChatGPT app per project. Register one DevSpace app and

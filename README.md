@@ -102,6 +102,19 @@ cd codexpro-automation
 설치기는 기존 파일을 백업하고
 `%USERPROFILE%\.codex\receipts`에 설치 영수증을 남깁니다.
 
+### 포크를 다른 PC에 설치
+
+포크도 같은 방식으로 clone하여 설치할 수 있습니다. 코드와 스킬만 Git으로
+배포하고, 각 PC에서는 아래 머신별 항목을 새로 설정합니다.
+
+- Tailscale 로그인과 Funnel 호스트명
+- DevSpace 허용 프로젝트 루트와 Owner 승인
+- Oracle 브라우저의 ChatGPT 로그인
+
+`%USERPROFILE%\.devspace\auth.json`, Oracle 브라우저 프로필,
+`%USERPROFILE%\.codex\state\chatgpt-oracle`은 비밀정보 또는 실행 상태이므로
+Git에 추가하거나 PC 사이에 복사하지 않습니다.
+
 ## DevSpace 최초 연결
 
 DevSpace 앱은 프로젝트마다 설치하는 것이 아닙니다. 앱 하나에 허용할
