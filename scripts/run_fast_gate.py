@@ -61,6 +61,11 @@ def run_fast_gate(*, budget_seconds: float = DEFAULT_BUDGET_SECONDS) -> dict[str
             cwd=str(ROOT),
             check=False,
             env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
             **_hidden_process_kwargs(),
         )
         elapsed = time.monotonic() - started
@@ -70,6 +75,7 @@ def run_fast_gate(*, budget_seconds: float = DEFAULT_BUDGET_SECONDS) -> dict[str
         "budget_seconds": budget_seconds,
         "within_budget": elapsed <= budget_seconds,
         "targets": list(FAST_TARGETS),
+        "output": str(completed.stdout or ""),
     }
 
 
@@ -89,6 +95,8 @@ def main(argv: list[str] | None = None) -> int:
         f"within_budget={result['within_budget']}"
     )
     if result["exit_code"] != 0:
+        if result["output"]:
+            print(result["output"], file=sys.stderr, end="" if str(result["output"]).endswith("\n") else "\n")
         return int(result["exit_code"])
     if args.enforce_budget and not result["within_budget"]:
         return 3
