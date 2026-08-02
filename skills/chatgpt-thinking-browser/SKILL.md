@@ -50,7 +50,9 @@ Do not replace this with the shared manual-login profile.
 Live execution and response tracking must follow the `chatgpt-oracle-runtime`
 Codex Luna tracking worker contract. Exactly one `gpt-5.6-luna` worker owns the
 whole blocking live command; the main Codex session must not submit or poll the
-same run concurrently.
+same run concurrently. The worker is signal-only and must not inspect project
+files, GPT output contents, diffs, or test meaning; the main Codex performs all
+review and completion judgment after the worker returns.
 
 Control state and final Oracle output are host-only below
 `%USERPROFILE%\.codex\state\chatgpt-oracle`. Complete requires exit zero and

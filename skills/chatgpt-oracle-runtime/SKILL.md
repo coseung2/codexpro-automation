@@ -78,6 +78,17 @@ Codex worker with `agent_type: "worker"`, `model: "gpt-5.6-luna"`,
 self-contained capsule containing the exact command, manifest, project root,
 and explicit non-goals. That worker is the sole submission-and-wait owner.
 
+The Luna worker is a signal-only lifecycle observer, not a reviewer. It may
+launch the exact command, wait, and relay only runner-emitted lifecycle/status,
+exit code, exact run or workflow identity, and artifact paths or hashes. It
+must not open or read project files, mission contents, `output.md` or
+transcript contents, inspect Git diffs, run independent validation, interpret
+test meaning, assess answer quality, or decide that the user task is complete.
+If the exact parent command itself runs a deterministic gate, the worker
+reports only its exit/status signal. After the worker returns, the main Codex
+session reads the artifacts, inspects files and diffs, runs any required
+verification, and makes every review and completion decision.
+
 The main Codex session must not execute the same live command, poll its run
 directory, or launch another tracking worker while that owner is active. Wait
 through the native worker-wait mechanism and surface only changed terminal or

@@ -74,7 +74,9 @@ python "$env:USERPROFILE\.codex\skills\chatgpt-oracle-runtime\scripts\run_chatgp
 
 Delegate that whole blocking live command to exactly one `gpt-5.6-luna`
 tracking worker under the `chatgpt-oracle-runtime` contract. The main Codex
-session must not submit or poll the same Pro run concurrently.
+session must not submit or poll the same Pro run concurrently. The worker is
+signal-only and must not inspect attachments, Pro output contents, or review
+quality; the main Codex performs the actual review after the worker returns.
 
 Completion requires exact Oracle Pro model evidence, attachment evidence, exit
 zero, a fresh nonempty host-only `output.md`, immutable hashes, and a refreshed

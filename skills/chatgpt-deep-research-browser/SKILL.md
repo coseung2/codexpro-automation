@@ -19,7 +19,8 @@ only for an explicitly authorized live run.
 Delegate the whole blocking live Deep Research command to exactly one
 `gpt-5.6-luna` tracking worker under the `chatgpt-oracle-runtime` contract.
 The main Codex session must not submit or poll the same research run
-concurrently.
+concurrently. The worker is signal-only and must not inspect or evaluate the
+research output; the main Codex reviews the result after the worker returns.
 
 Do not silently replace Deep Research with ordinary search or Pro. Existing
 agbrowse Deep Research records may be recovered only by their exact old run

@@ -34,6 +34,8 @@ Delegate the whole blocking Multi parent command to exactly one
 `gpt-5.6-luna` tracking worker under the `chatgpt-oracle-runtime` contract.
 Do not create one tracking worker per lane: Oracle owns lane concurrency, and
 the main Codex session must not submit or poll the same parent concurrently.
+The worker is signal-only and must not inspect lane handoffs, merger output,
+project files, or result quality; the main Codex reviews them after return.
 
 No attachments, app/settings automation, broad tab cleanup, `--force`,
 restart, or silent resubmission. Oracle owns one-shot tab archival. Existing

@@ -101,6 +101,11 @@ def test_live_web_gpt_tracking_has_one_exact_luna_worker_owner() -> None:
         'reasoning_effort: "high"',
         "fork_context: false",
         "sole submission-and-wait owner",
+        "signal-only lifecycle observer, not a reviewer",
+        "must not open or read project files",
+        "`output.md` or transcript contents",
+        "inspect Git diffs",
+        "main Codex session reads the artifacts",
         "must not execute the same live command",
         "must never resubmit",
         "do not silently substitute another model",
@@ -112,6 +117,8 @@ def test_live_web_gpt_tracking_has_one_exact_luna_worker_owner() -> None:
         normalized_value = " ".join(value.split())
         assert "gpt-5.6-luna" in value
         assert "tracking worker" in value
+        assert "signal-only" in value
+        assert "must not inspect" in normalized_value
         assert "main Codex session must not" in normalized_value
 
     assert "one Luna worker owns the whole parent command" in normalized_runtime
