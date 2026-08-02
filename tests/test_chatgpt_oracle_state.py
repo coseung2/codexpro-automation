@@ -37,6 +37,28 @@ def manifest(tmp_path: Path, mission_path: Path | str, **extra) -> Path:
     return path.resolve()
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows atomic replace retry")
+def test_atomic_state_write_retries_transient_windows_access_denied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state = load_state()
+    target = tmp_path / "state.json"
+    real_replace = state.os.replace
+    calls = 0
+
+    def flaky_replace(source, destination):
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise PermissionError(13, "transient access denied", str(destination))
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(state.os, "replace", flaky_replace)
+    state.write_json_atomic(target, {"ok": True})
+    assert calls == 3
+    assert json.loads(target.read_text(encoding="utf-8")) == {"ok": True}
+
+
 def test_invalid_utf8_and_relative_mission_are_rejected(tmp_path: Path) -> None:
     state = load_state()
     bad = tmp_path / "bad.md"

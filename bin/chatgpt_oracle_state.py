@@ -643,7 +643,17 @@ def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f"{path.name}.tmp.{os.getpid()}.{uuid.uuid4().hex}")
     temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.replace(temporary, path)
+    for attempt in range(50):
+        try:
+            os.replace(temporary, path)
+            break
+        except PermissionError:
+            if os.name != "nt" or attempt == 49:
+                temporary.unlink(missing_ok=True)
+                raise
+            # Windows filesystem filters and readers can transiently deny the
+            # atomic rename even when handles request delete sharing.
+            time.sleep(min(0.005 * (attempt + 1), 0.05))
 
 
 def load_state(path: Path) -> dict[str, Any]:
