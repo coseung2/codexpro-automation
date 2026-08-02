@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference='Stop'
 $ManageLegacyDependency=[bool]$InstallLegacyRecoveryDependency -and -not [bool]$SkipDependencyInstall
 $RepoRoot=Split-Path -Parent $MyInvocation.MyCommand.Path
-$Manifest=Get-Content (Join-Path $RepoRoot 'install-manifest.json') -Raw|ConvertFrom-Json
+$Manifest=Get-Content (Join-Path $RepoRoot 'install-manifest.json') -Raw -Encoding UTF8|ConvertFrom-Json
 $HomeRoot=[IO.Path]::GetFullPath($CodexHome)
 $Nonce=[guid]::NewGuid().ToString('N'); $Stamp=[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmssfff')
 $BackupRoot=Join-Path $HomeRoot "backups/codexpro-automation-$Stamp-$Nonce"; $ReceiptRoot=Join-Path $HomeRoot 'receipts'
@@ -48,7 +48,7 @@ function Get-ManifestFiles([string]$Root,$Value){$files=@();foreach($pattern in 
 function Resume-PendingInstallTransactions([string]$Root){
   $backupBase=Join-Path $Root 'backups';if(!(Test-Path -LiteralPath $backupBase)){return}
   foreach($journalPath in @(Get-ChildItem -LiteralPath $backupBase -Filter 'install.wal.json' -File -Recurse -Force -ErrorAction SilentlyContinue|Sort-Object FullName)){
-    $journal=Get-Content -LiteralPath $journalPath.FullName -Raw|ConvertFrom-Json
+    $journal=Get-Content -LiteralPath $journalPath.FullName -Raw -Encoding UTF8|ConvertFrom-Json
     if($journal.schema -ne 'codexpro.install-wal/v1' -or $journal.status -eq 'COMPLETE' -or $journal.status -eq 'ROLLED_BACK_AFTER_CRASH'){continue}
     $conflicts=@();$entries=@($journal.files)
     for($index=$entries.Count-1;$index -ge 0;$index--){

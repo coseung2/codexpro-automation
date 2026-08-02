@@ -26,6 +26,7 @@ def write_run(
     *,
     status: str,
     stdout: str = "",
+    stderr: str = "",
     output: str | None = None,
     session_authority: str = "",
     terminal_harvested: bool = False,
@@ -38,7 +39,7 @@ def write_run(
     if output is not None:
         output_path.write_text(output, encoding="utf-8")
     (run_dir / "stdout.log").write_text(stdout, encoding="utf-8")
-    (run_dir / "stderr.log").write_text("", encoding="utf-8")
+    (run_dir / "stderr.log").write_text(stderr, encoding="utf-8")
     (run_dir / "state.json").write_text(json.dumps({
         "schema": "codex.chatgpt.oracle-run-state/v1",
         "status": status,
@@ -91,6 +92,26 @@ def test_packet_never_marks_fresh_run_safe_while_another_session_owns_project(tm
 
     assert packet["safe_for_fresh_run"] is False
     assert [item["run_id"] for item in packet["unresolved_owners"]] == [owner.name]
+
+
+def test_compat_failure_in_stderr_is_safe_pre_submit_incident(tmp_path: Path) -> None:
+    module = load()
+    run_dir = write_run(
+        tmp_path,
+        "compat01",
+        status="failed",
+        stderr=(
+            "version resolution failed: "
+            "Oracle compatibility refuses an unknown third-party file\n"
+        ),
+        session_authority="pre_submit",
+    )
+
+    packet = module.build_packet(run_dir)
+
+    assert packet["bucket"] == "pre-submit-host-environment"
+    assert packet["signature"] == "oracle-compat-file-hash-mismatch"
+    assert packet["safe_for_fresh_run"] is True
 
 
 def test_reporter_is_never_the_repair_owner(tmp_path: Path) -> None:

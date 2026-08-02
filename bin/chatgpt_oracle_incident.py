@@ -84,6 +84,7 @@ def build_packet(run_dir: Path, *, reporter_role: str = REPORTER_ROLE) -> dict[s
     verdict = DIAGNOSE.classify_run(
         state,
         stdout_text=DIAGNOSE._read_text(directory / "stdout.log"),
+        stderr_text=DIAGNOSE._read_text(directory / "stderr.log"),
         has_output=DIAGNOSE._output_is_nonempty(output_path),
         transcript_text=DIAGNOSE._read_text(directory / "transcript.md"),
         user_confirmed_no_submission=(

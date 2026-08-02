@@ -24,7 +24,10 @@ PATCHES = {
     "dist/src/browser/profileCopy.js": {
         "patch": "profileCopy.patch",
         "pristine": "06c692861f8a4c1a8769f957b9c582426a13bf4972262c47c1f24a87b239064f",
-        "patched": "71459a25b7c46f57bae6f23a5498301f6f6a1d39addf0c1cd4eee1d99b03372c",
+        "patched": "9233319ce91c15d13b351640627dce3791ede39ac949966654abf4a8c7d9c8dc",
+        "legacy_patched": [
+            "71459a25b7c46f57bae6f23a5498301f6f6a1d39addf0c1cd4eee1d99b03372c",
+        ],
     },
     "dist/src/cli/browserConfig.js": {
         "patch": "browserConfig.patch",

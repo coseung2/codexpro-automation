@@ -210,6 +210,25 @@ def test_copy_profile_recovery_patch_reuses_only_the_persisted_profile_seed() ->
     assert contract["patched"] == "650ffe9bdbbaf799510e8cacaa8ba8407322bbbb175e790a3cf7777fa14772fe"
 
 
+def test_windows_profile_copy_patch_retries_ebusy_in_fresh_staging_dirs() -> None:
+    compat = load_compat()
+    contract = compat.PATCHES["dist/src/browser/profileCopy.js"]
+    patch = (
+        MODULE_PATH.parent
+        / "oracle-compat"
+        / "0.16.1"
+        / contract["patch"]
+    ).read_text(encoding="utf-8")
+
+    assert "WINDOWS_COPY_RETRY_DELAYS_MS" in patch
+    assert "ORACLE_PRE_SUBMIT_PROFILE_COPY_EBUSY_EXHAUSTED" in patch
+    assert ".profile-copy-attempt-${process.pid}-${attempt}" in patch
+    assert 'error.code === "EBUSY"' in patch
+    assert "await rename(stagingProfile, destProfile)" in patch
+    assert contract["patched"] == "9233319ce91c15d13b351640627dce3791ede39ac949966654abf4a8c7d9c8dc"
+    assert "71459a25b7c46f57bae6f23a5498301f6f6a1d39addf0c1cd4eee1d99b03372c" in contract["legacy_patched"]
+
+
 def test_hidden_window_patch_supports_windows_without_headless_mode() -> None:
     compat = load_compat()
     contract = compat.PATCHES["dist/src/browser/chromeLifecycle.js"]

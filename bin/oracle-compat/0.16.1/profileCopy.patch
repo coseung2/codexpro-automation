@@ -1,8 +1,30 @@
 diff --git a/dist/src/browser/profileCopy.js b/dist/src/browser/profileCopy.js
-index c253a98..5e3913e 100644
+index c253a98..d9a19cd 100644
 --- a/dist/src/browser/profileCopy.js
 +++ b/dist/src/browser/profileCopy.js
-@@ -47,18 +47,31 @@ export async function copyChromeProfile(srcUserDataDir, destDir, requestedProfil
+@@ -1,6 +1,7 @@
+ import { spawn } from "node:child_process";
+-import { cp, mkdir, readFile, rm } from "node:fs/promises";
++import { cp, mkdir, readFile, rename, rm } from "node:fs/promises";
+ import path from "node:path";
++import { setTimeout as delay } from "node:timers/promises";
+ /**
+  * Cache/derived subdirectories that bloat the copy and carry no signed-in-session
+  * signal, so they are skipped when seeding a copied Chrome profile.
+@@ -17,6 +18,8 @@ const RSYNC_EXCLUDES = [
+     "Service Worker/ScriptCache/",
+     "Service Worker/Database/",
+ ];
++const WINDOWS_COPY_RETRY_DELAYS_MS = [0, 250, 500, 1000, 2000];
++const WINDOWS_COPY_EBUSY_SENTINEL = "ORACLE_PRE_SUBMIT_PROFILE_COPY_EBUSY_EXHAUSTED";
+ /**
+  * Copy a signed-in Chrome user-data directory into `destDir` so a throwaway
+  * Chrome can launch on the copy and reuse the live session WITHOUT a manual
+@@ -43,22 +46,59 @@ export async function copyChromeProfile(srcUserDataDir, destDir, requestedProfil
+         const profileDirectory = resolveChromeProfileDirectory(srcUserDataDir, localState, requestedProfile);
+         const srcProfile = path.join(srcUserDataDir, profileDirectory);
+         const destProfile = path.join(destDir, profileDirectory);
+-        await mkdir(destProfile, { recursive: true });
          // `Local State` is required (holds the Keychain-wrapped key that decrypts the
          // cookies), so a copy failure must fail fast — otherwise the run continues with
          // a profile that silently looks logged-out.
@@ -11,16 +33,49 @@ index c253a98..5e3913e 100644
 -            args.push("--exclude", exclude);
 +        if (process.platform === "win32") {
 +            const excluded = RSYNC_EXCLUDES.map((value) => value.replaceAll("\\", "/").replace(/\/$/, ""));
-+            await cp(srcProfile, destProfile, {
-+                recursive: true,
-+                force: true,
-+                filter: (source) => {
-+                    const relative = path.relative(srcProfile, source).replaceAll("\\", "/");
-+                    return !excluded.some((value) => relative === value || relative.startsWith(`${value}/`));
-+                },
-+            });
-+        }
++            for (let attempt = 0; attempt < WINDOWS_COPY_RETRY_DELAYS_MS.length; attempt += 1) {
++                const stagingProfile = path.join(destDir, `.profile-copy-attempt-${process.pid}-${attempt}`);
++                if (WINDOWS_COPY_RETRY_DELAYS_MS[attempt] > 0) {
++                    await delay(WINDOWS_COPY_RETRY_DELAYS_MS[attempt]);
++                }
++                await rm(stagingProfile, { recursive: true, force: true });
++                await mkdir(stagingProfile, { recursive: true });
++                try {
++                    await cp(srcProfile, stagingProfile, {
++                        recursive: true,
++                        force: true,
++                        filter: (source) => {
++                            const relative = path.relative(srcProfile, source).replaceAll("\\", "/");
++                            return !excluded.some((value) => relative === value || relative.startsWith(`${value}/`));
++                        },
++                    });
++                    await rm(destProfile, { recursive: true, force: true });
++                    await rename(stagingProfile, destProfile);
++                    break;
++                }
++                catch (error) {
++                    await rm(stagingProfile, { recursive: true, force: true });
++                    const isRetryable = error && typeof error === "object" && error.code === "EBUSY";
++                    const exhausted = attempt === WINDOWS_COPY_RETRY_DELAYS_MS.length - 1;
++                    if (!isRetryable || exhausted) {
++                        if (isRetryable && exhausted) {
++                            process.stderr.write(`${WINDOWS_COPY_EBUSY_SENTINEL}\n`);
++                        }
++                        throw error;
++                    }
++                }
++            }
+         }
+-        args.push(`${srcProfile}/`, `${destProfile}/`);
+-        await new Promise((resolve, reject) => {
+-            const child = spawn("rsync", args, { stdio: "ignore" });
+-            child.on("error", (err) => reject(new Error(`--copy-profile requires rsync on PATH (spawn failed): ${err.message}`)));
+-            child.on("close", (code) => code === 0 || code === 24
+-                ? resolve()
+-                : reject(new Error(`rsync failed copying Chrome profile (exit ${code})`)));
+-        });
 +        else {
++            await mkdir(destProfile, { recursive: true });
 +            const args = ["-a"];
 +            for (const exclude of RSYNC_EXCLUDES) {
 +                args.push("--exclude", exclude);
@@ -33,15 +88,7 @@ index c253a98..5e3913e 100644
 +                    ? resolve()
 +                    : reject(new Error(`rsync failed copying Chrome profile (exit ${code})`)));
 +            });
-         }
--        args.push(`${srcProfile}/`, `${destProfile}/`);
--        await new Promise((resolve, reject) => {
--            const child = spawn("rsync", args, { stdio: "ignore" });
--            child.on("error", (err) => reject(new Error(`--copy-profile requires rsync on PATH (spawn failed): ${err.message}`)));
--            child.on("close", (code) => code === 0 || code === 24
--                ? resolve()
--                : reject(new Error(`rsync failed copying Chrome profile (exit ${code})`)));
--        });
++        }
          return profileDirectory;
      }
      catch (error) {

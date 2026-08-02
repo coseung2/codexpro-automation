@@ -331,6 +331,17 @@ def test_install_dependency_recovery_and_rollback_preflight_are_ordered() -> Non
     assert rollback.index('$dependencyPreflight=') < rollback.index('$conflicts=@();foreach($record')
 
 
+def test_windows_powershell_reads_persisted_json_as_utf8() -> None:
+    install = (ROOT / 'install.ps1').read_text(encoding='utf-8')
+    rollback = (ROOT / 'rollback.ps1').read_text(encoding='utf-8')
+    update = (ROOT / 'update.ps1').read_text(encoding='utf-8')
+
+    assert "Get-Content (Join-Path $RepoRoot 'install-manifest.json') -Raw -Encoding UTF8" in install
+    assert "Get-Content -LiteralPath $journalPath.FullName -Raw -Encoding UTF8" in install
+    assert "Get-Content -LiteralPath $fullReceipt -Raw -Encoding UTF8" in rollback
+    assert update.count('-Raw -Encoding UTF8') >= 5
+
+
 def test_uninstall_preserves_modified_created_file_and_reports_conflict() -> None:
     with tempfile.TemporaryDirectory() as home:
         codex_home = Path(home)

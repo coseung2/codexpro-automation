@@ -61,6 +61,11 @@ BUCKETS = (
 )
 
 SIGNATURE_RULES: tuple[tuple[str, str, str], ...] = (
+    (
+        "version resolution failed: Oracle compatibility refuses an unknown third-party file",
+        PRE_SUBMIT_HOST,
+        "oracle-compat-file-hash-mismatch",
+    ),
     ("rsync", PRE_SUBMIT_HOST, "oracle-profile-copy-requires-rsync"),
     ("cannot be combined with", PRE_SUBMIT_HOST, "oracle-launch-flags-mutually-exclusive"),
     ("app mention suggestion did not appear", PRE_SUBMIT_UI, "app-mention-suggestion-absent"),
@@ -110,6 +115,7 @@ def classify_run(
     state: dict[str, Any],
     *,
     stdout_text: str,
+    stderr_text: str = "",
     has_output: bool,
     transcript_text: str = "",
     user_confirmed_no_submission: bool = False,
@@ -146,8 +152,9 @@ def classify_run(
             "signature": "host-wall-clock-expired-process-preserved",
         }
 
+    diagnostic_text = f"{stdout_text}\n{stderr_text}"
     for needle, bucket, signature in SIGNATURE_RULES:
-        if needle in stdout_text:
+        if needle in diagnostic_text:
             return {"bucket": bucket, "signature": signature}
 
     if lifecycle == "running":
@@ -190,6 +197,7 @@ def diagnose(state_root: Path | None = None) -> dict[str, Any]:
         verdict = classify_run(
             state,
             stdout_text=_read_text(run_dir / "stdout.log"),
+            stderr_text=_read_text(run_dir / "stderr.log"),
             has_output=_output_is_nonempty(output_path),
             transcript_text=_read_text(run_dir / "transcript.md"),
             user_confirmed_no_submission=(

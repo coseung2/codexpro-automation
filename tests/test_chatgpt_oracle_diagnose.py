@@ -24,6 +24,7 @@ def write_run(
     *,
     status: str,
     stdout: str = "",
+    stderr: str = "",
     output: str | None = None,
     session_authority: str = "",
     terminal_harvested: bool = False,
@@ -35,6 +36,7 @@ def write_run(
     if output is not None:
         output_path.write_text(output, encoding="utf-8")
     (run_dir / "stdout.log").write_text(stdout, encoding="utf-8")
+    (run_dir / "stderr.log").write_text(stderr, encoding="utf-8")
     (run_dir / "state.json").write_text(json.dumps({
         "schema": "codex.chatgpt.oracle-run-state/v1",
         "status": status,
@@ -105,6 +107,27 @@ def test_pre_submit_signature_outranks_post_submit_interpretation(tmp_path: Path
 
     assert run["bucket"] == "pre-submit-ui-contract"
     assert run["signature"] == "app-mention-suggestion-absent"
+
+
+def test_oracle_compat_hash_mismatch_is_pre_submit_host_failure(tmp_path: Path) -> None:
+    module = load()
+    state_root = tmp_path / "oracle-state"
+    write_run(
+        state_root,
+        "compat01",
+        status="failed",
+        stderr=(
+            "version resolution failed: "
+            "Oracle compatibility refuses an unknown third-party file\n"
+        ),
+        session_authority="pre_submit",
+    )
+
+    report = module.diagnose(state_root)
+    run = report["unresolved_runs"][0]
+
+    assert run["bucket"] == "pre-submit-host-environment"
+    assert run["signature"] == "oracle-compat-file-hash-mismatch"
 
 
 def test_durable_terminal_run_is_complete_and_not_executed_is_separated(tmp_path: Path) -> None:
