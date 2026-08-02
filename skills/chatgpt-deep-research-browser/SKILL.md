@@ -21,6 +21,7 @@ Delegate the whole blocking live Deep Research command to exactly one
 The main Codex session must not submit or poll the same research run
 concurrently. The worker is signal-only and must not inspect or evaluate the
 research output; the main Codex reviews the result after the worker returns.
+Unchanged waits are silent and must not produce heartbeat commentary.
 
 Do not silently replace Deep Research with ordinary search or Pro. Existing
 agbrowse Deep Research records may be recovered only by their exact old run

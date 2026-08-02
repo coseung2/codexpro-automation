@@ -107,6 +107,11 @@ def test_live_web_gpt_tracking_has_one_exact_luna_worker_owner() -> None:
         "inspect Git diffs",
         "main Codex session reads the artifacts",
         "must not execute the same live command",
+        "Unchanged waits are silent",
+        "do not emit heartbeat commentary",
+        "silently reissue wait for the same worker",
+        "Do not send a final answer merely because a worker was spawned",
+        "explicit user status request",
         "must never resubmit",
         "do not silently substitute another model",
     ):
@@ -120,6 +125,8 @@ def test_live_web_gpt_tracking_has_one_exact_luna_worker_owner() -> None:
         assert "signal-only" in value
         assert "must not inspect" in normalized_value
         assert "main Codex session must not" in normalized_value
+        assert "waits are silent" in normalized_value
+        assert "heartbeat commentary" in normalized_value
 
     assert "one Luna worker owns the whole parent command" in normalized_runtime
     assert "Do not create one tracking worker per lane" in text(MULTI)

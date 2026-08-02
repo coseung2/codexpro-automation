@@ -96,6 +96,17 @@ attention-required evidence. For Web Multi or comprehensive mode, one Luna
 worker owns the whole parent command; do not create a tracking worker per lane
 or stage.
 
+Unchanged waits are silent. Keep the main turn open in native worker wait; do
+not emit heartbeat commentary such as "still running", "no signal yet", elapsed
+time, or unchanged-run summaries. A wait-window timeout is an internal control
+event: silently reissue wait for the same worker without reading the run in the
+main session. The tracking worker should use one blocking watcher/tool call
+where possible instead of a model-generated polling narration. Do not send a
+final answer merely because a worker was spawned. Output is allowed only for an
+actual terminal/attention transition, worker termination that requires one
+successor, or an explicit user status request; after a requested snapshot,
+resume silent wait.
+
 If an exact run already exists, the tracking worker may use only the official
 exact-slug `live` or `harvest` recovery path. It must never resubmit, use
 `--force`, abandon or kill the run, edit state, or touch credentials and

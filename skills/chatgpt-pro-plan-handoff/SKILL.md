@@ -80,7 +80,8 @@ command to exactly one `gpt-5.6-luna` tracking worker under the
 stage and any Multi parent; the main Codex session must not poll stages or
 create a tracking worker per stage or lane. The worker is signal-only and must
 not inspect stage artifacts, project files, diffs, or test meaning; the main
-Codex validates the workflow result after the worker returns.
+Codex validates the workflow result after the worker returns. Unchanged stage
+waits are silent and must not produce heartbeat commentary.
 
 The review GPT owns plan repair and finalization. It does not merely list
 findings: it directly repairs every defect resolvable from the mission,
