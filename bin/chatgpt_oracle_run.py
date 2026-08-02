@@ -380,6 +380,18 @@ def execute_run(
                 if config.parallel_parent_id
                 else config.project_root
             )
+            owners = STATE.unresolved_project_sessions(
+                config.run_root,
+                config.project_root,
+                parallel_parent_id=config.parallel_parent_id,
+                exclude_run_id=layout.run_id,
+            )
+            if owners:
+                raise OracleRunError(
+                    "PROJECT_SESSION_STILL_LIVE",
+                    "an exact Oracle session still owns this project; recover it before submitting",
+                    {"owners": owners},
+                )
             with STATE.project_submit_mutex(mutex_root, timeout_seconds=config.submit_mutex_timeout_seconds, platform_name=platform_name):
                 owners = STATE.unresolved_project_sessions(
                     config.run_root,
@@ -511,11 +523,10 @@ def execute_run(
         if transport_complete
         else "pending"
     )
-    semantic_complete = task_outcome in {
-        "executed",
-        "not_applicable",
-        "legacy_unclassified",
-    }
+    semantic_complete = STATE.task_outcome_allows_completion(
+        task_outcome,
+        contract=config.task_outcome_contract,
+    )
     status = "complete" if transport_complete and semantic_complete else "attention_required"
     if transport_complete:
         state = STATE.update_state(
@@ -777,11 +788,7 @@ def _recover_run_locked(
         if harvested
         else "pending"
     )
-    semantic_complete = task_outcome in {
-        "executed",
-        "not_applicable",
-        "legacy_unclassified",
-    }
+    semantic_complete = STATE.task_outcome_allows_completion(task_outcome, contract=contract)
     status = "complete" if harvested and semantic_complete else "attention_required"
     latest = STATE.load_state(layout.state_path)
     latest_output = Path(str(latest.get("artifacts", {}).get("output") or output_path))

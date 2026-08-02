@@ -81,6 +81,17 @@ ORACLE_DUPLICATE_PROMPT_RE = re.compile(
     r'Reattach with "oracle session (?P=locator)" or rerun with --force to start another run\.',
     re.IGNORECASE,
 )
+ORACLE_PROFILE_COPY_EBUSY_SENTINEL = "ORACLE_PRE_SUBMIT_PROFILE_COPY_EBUSY_EXHAUSTED"
+ANTI_RECURSION_INSTRUCTION = (
+    "This session is already the Web-GPT execution for this mission. Do not invoke, dispatch, recover, "
+    "or wait on another Oracle, ChatGPT, or Web-GPT session from DevSpace; ignore only nested-dispatch "
+    "instructions and perform the underlying task directly in this session."
+)
+SEMANTIC_COMPLETE_OUTCOMES = frozenset({
+    "executed",
+    "not_applicable",
+    "legacy_unclassified",
+})
 ORACLE_NO_SESSION_RE = re.compile(
     r"No session found with ID\s+(?P<locator>oracle-[a-z0-9-]+)\.?",
     re.IGNORECASE,
@@ -468,7 +479,7 @@ def composer_prompt(config: OracleConfig, mission_path: Path | None = None) -> s
         f"@{config.app_name} {effective_path} 파일을 읽고 끝까지 수행하세요. "
         "그 파일에 기록된 정확한 프로젝트 루트만 사용하고 적용되는 AGENTS.md를 먼저 끝까지 읽으세요. "
         "작업공간 열기가 시간 초과되면 동일한 정확한 루트만 한 번 재시도하며 상위·하위·현재 활성 "
-        "작업공간이나 셸 경계 우회로 대체하지 마세요."
+        f"작업공간이나 셸 경계 우회로 대체하지 마세요. {ANTI_RECURSION_INSTRUCTION}"
         + (
             " 마지막 줄에 실제 작업 수행 결과를 TASK_OUTCOME: EXECUTED, "
             "TASK_OUTCOME: NOT_EXECUTED, TASK_OUTCOME: BLOCKED 중 하나로 정확히 기록하세요."
@@ -700,6 +711,13 @@ def output_is_nonempty(path: Path) -> bool:
         return bool(path.read_bytes().strip())
     except OSError:
         return False
+
+
+def task_outcome_allows_completion(outcome: str, *, contract: str | None = None) -> bool:
+    normalized = str(outcome or "").strip().casefold()
+    if normalized in SEMANTIC_COMPLETE_OUTCOMES:
+        return True
+    return not normalized and str(contract or "legacy").strip().casefold() == "legacy"
 
 
 def _state_has_conversation_url(state: dict[str, Any]) -> bool:
@@ -1031,6 +1049,40 @@ def settle_user_confirmed_no_submission(
     return payload
 
 
+def proven_pre_submit_profile_copy_failure(state_path: Path) -> dict[str, Any] | None:
+    """Prove the bounded profile-copy retry exhausted before a web submission."""
+    state = load_state(state_path)
+    if str(state.get("session_authority") or "") not in {"pre_submit", "submitted_unknown"}:
+        return None
+    if _state_has_conversation_url(state):
+        return None
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    output = Path(str(artifacts.get("output") or ""))
+    if str(output) and output_is_nonempty(output):
+        return None
+    for name in ("stdout", "stderr"):
+        record = _artifact_bytes(state, name)
+        if record is None:
+            continue
+        _, source_bytes = record
+        try:
+            source_text = source_bytes.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            continue
+        if ORACLE_PROFILE_COPY_EBUSY_SENTINEL in {
+            line.strip() for line in source_text.splitlines()
+        }:
+            return {
+                "schema": "codex.chatgpt.oracle-pre-submit-host-failure/v1",
+                "code": "ORACLE_PROFILE_COPY_EBUSY_EXHAUSTED",
+                "source": name,
+                "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+                "output_absent": True,
+                "conversation_url_absent": True,
+            }
+    return None
+
+
 def proven_pre_submit_rejection(state_path: Path) -> dict[str, Any] | None:
     """Return immutable evidence only for Oracle's own pre-submit prompt dedup rejection."""
     state = load_state(state_path)
@@ -1110,6 +1162,7 @@ def proven_pre_submit_host_failure(state_path: Path) -> dict[str, Any] | None:
 def proven_pre_submit_failure(state_path: Path) -> dict[str, Any] | None:
     return (
         proven_pre_submit_rejection(state_path)
+        or proven_pre_submit_profile_copy_failure(state_path)
         or proven_pre_submit_host_failure(state_path)
         or proven_user_confirmed_no_submission(state_path)
     )
@@ -1144,7 +1197,8 @@ def settle_proven_pre_submit_failure(state_path: Path) -> dict[str, Any] | None:
     confirmed = proven_user_confirmed_no_submission(state_path)
     if confirmed is not None:
         return load_state(state_path)
-    evidence = proven_pre_submit_host_failure(state_path)
+    profile_copy = proven_pre_submit_profile_copy_failure(state_path)
+    evidence = profile_copy or proven_pre_submit_host_failure(state_path)
     if evidence is None:
         return None
     payload = load_state(state_path)
@@ -1156,7 +1210,11 @@ def settle_proven_pre_submit_failure(state_path: Path) -> dict[str, Any] | None:
         "artifact_sha256": None,
         "transport_status": "failed_pre_submit",
         "task_outcome": "pending",
-        "task_outcome_reason": "prelaunch-host-failure",
+        "task_outcome_reason": (
+            "profile-copy-ebusy-exhausted"
+            if profile_copy is not None
+            else "prelaunch-host-failure"
+        ),
         "pre_submit_failure": evidence,
     })
     write_json_atomic(state_path, payload)
@@ -1228,6 +1286,7 @@ def resolve_lifecycle(state: dict[str, Any], *, output_is_present: bool | None =
     authority = str(state.get("session_authority") or "")
     harvested = state.get("terminal_harvested") is True
     outcome = str(state.get("task_outcome") or "")
+    contract = str(state.get("task_outcome_contract") or "legacy")
     if output_is_present is None:
         artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
         output_path = Path(str(artifacts.get("output") or ""))
@@ -1239,13 +1298,13 @@ def resolve_lifecycle(state: dict[str, Any], *, output_is_present: bool | None =
         return {"lifecycle": "abandoned", "authority_source": "explicit-abandonment"}
     # 1. Exact terminal web evidence.
     if authority == "terminal" and harvested and has_output:
-        if outcome == "not_executed":
+        if not task_outcome_allows_completion(outcome, contract=contract):
             return {"lifecycle": "needs_attention", "authority_source": "exact-terminal-evidence"}
         return {"lifecycle": "complete", "authority_source": "exact-terminal-evidence"}
     # 2. Durable stored artifact, including ledgers written before authority
     #    tracking existed.  A finished answer on disk is not a defect.
     if has_output and status == "complete":
-        if outcome == "not_executed":
+        if not task_outcome_allows_completion(outcome, contract=contract):
             return {"lifecycle": "needs_attention", "authority_source": "durable-artifact"}
         return {"lifecycle": "complete", "authority_source": "durable-artifact"}
     # 3. An owned session that is still live keeps running regardless of a

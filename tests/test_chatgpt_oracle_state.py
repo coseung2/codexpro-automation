@@ -60,6 +60,7 @@ def test_prompt_is_plain_app_plus_absolute_mission_instruction(tmp_path: Path) -
     assert prompt.startswith(f"@DevSpace {mission.resolve()} 파일을 읽고 끝까지 수행하세요.")
     assert "동일한 정확한 루트만 한 번 재시도" in prompt
     assert "상위·하위·현재 활성 작업공간이나 셸 경계 우회" in prompt
+    assert state.ANTI_RECURSION_INSTRUCTION in prompt
     assert "\n" not in prompt
 
 
@@ -430,6 +431,44 @@ def test_not_executed_outcome_needs_attention_even_when_terminal(tmp_path: Path)
     })
 
     assert verdict["lifecycle"] == "needs_attention"
+
+
+def test_task_outcome_completion_respects_legacy_and_v1_contracts() -> None:
+    state = load_state()
+
+    assert state.task_outcome_allows_completion("executed", contract="v1") is True
+    assert state.task_outcome_allows_completion("not_applicable", contract="v1") is True
+    assert state.task_outcome_allows_completion("legacy_unclassified", contract="legacy") is True
+    assert state.task_outcome_allows_completion("", contract="legacy") is True
+    assert state.task_outcome_allows_completion("", contract="v1") is False
+    assert state.task_outcome_allows_completion("not_executed", contract="legacy") is False
+    assert state.task_outcome_allows_completion("blocked", contract="v1") is False
+
+
+def test_profile_copy_ebusy_sentinel_is_proven_and_settled_pre_submit(tmp_path: Path) -> None:
+    state = load_state()
+    mission = tmp_path / "mission.md"
+    mission.write_text("work", encoding="utf-8")
+    config = state.load_manifest(manifest(tmp_path, mission.resolve()))
+    layout = state.create_layout(config, run_id="e" * 32)
+    layout.run_dir.mkdir(parents=True)
+    layout.stdout_path.write_text("", encoding="utf-8")
+    layout.stderr_path.write_text(
+        f"copy failed\n{state.ORACLE_PROFILE_COPY_EBUSY_SENTINEL}\n",
+        encoding="utf-8",
+    )
+    state.write_json_atomic(
+        layout.state_path,
+        state.state_payload(config, layout, status="failed", resolved_version="0.16.1"),
+    )
+
+    settled = state.settle_proven_pre_submit_failure(layout.state_path)
+
+    assert settled is not None
+    assert settled["session_authority"] == "pre_submit"
+    assert settled["transport_status"] == "failed_pre_submit"
+    assert settled["task_outcome_reason"] == "profile-copy-ebusy-exhausted"
+    assert settled["pre_submit_failure"]["code"] == "ORACLE_PROFILE_COPY_EBUSY_EXHAUSTED"
 
 
 def test_local_ledger_is_the_lowest_authority(tmp_path: Path) -> None:

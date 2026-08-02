@@ -1143,26 +1143,53 @@ def _run_workflow_locked(
     config["_review_policy"] = _review_policy_from_history(config)
     config["_parallel_parent_id"] = hashlib.sha256(workflow_id.encode("utf-8")).hexdigest()
     config["workflow_dir"].mkdir(parents=True, exist_ok=True)
+    state_path = _state_path(config, workflow_id)
     if dry_run:
+        stage = "plan"
+        source = config["initial_mission_path"]
+        index = 0
+        if state_path.is_file():
+            stored = _json(state_path)
+            if stored.get("manifest_sha256") != config["manifest_sha256"]:
+                raise WorkflowError("workflow manifest changed before dry-run preview")
+            if stored.get("status") != "prepared":
+                raise WorkflowError("existing workflow dry-run requires status prepared")
+            stage = str(stored.get("next_stage") or "")
+            if stage not in {"plan", "pro", "review", "implementation", "final-web-gate"}:
+                raise WorkflowError("prepared workflow has no previewable next web stage")
+            source = _inside(config["project_root"], stored.get("next_mission_path"))
+            if sha(source) != str(stored.get("next_mission_sha256") or ""):
+                raise WorkflowError("prepared workflow mission hash mismatch")
+            index = int(stored.get("next_index") or 0)
         attempt_id = uuid.uuid4().hex
-        mission, receipt_path, input_sha = _stage_mission(
-            config, workflow_id, 0, "plan", config["initial_mission_path"], attempt_id
+        if stage == "pro":
+            pro_attachments = _declared_pro_attachments(config, source)
+            mission, receipt_path, input_sha = _pro_stage_mission(
+                config, workflow_id, index, source, attempt_id
+            )
+        else:
+            if _mission_contains_pro_attachment_contract(source):
+                raise WorkflowError("Pro attachment contract is forbidden for regular DevSpace stages")
+            pro_attachments = ()
+            mission, receipt_path, input_sha = _stage_mission(
+                config, workflow_id, index, stage, source, attempt_id
+            )
+        oracle_manifest = _oracle_manifest(
+            config, mission, mission.parent, attempt_id, stage=stage, pro_attachments=pro_attachments
         )
-        oracle_manifest = _oracle_manifest(config, mission, mission.parent, attempt_id, stage="plan")
         preview = oracle_execute(oracle_manifest, dry_run=True)
         return {
             "ok": bool(preview.get("ok")),
             "schema": STATE_SCHEMA,
             "status": "dry-run",
             "workflow_id": workflow_id,
-            "stage": "plan",
+            "stage": stage,
             "attempt_id": attempt_id,
             "input_mission_sha256": input_sha,
             "receipt_path": str(receipt_path),
             "oracle_preview": preview,
         }
     _claim_scope(config, workflow_id)
-    state_path = _state_path(config, workflow_id)
     if state_path.is_file():
         stored = _json(state_path)
         if stored.get("manifest_sha256") != config["manifest_sha256"]:
@@ -1600,13 +1627,127 @@ def run_workflow(
         )
 
 
+def repair_terminal_not_executed(manifest_path: Path) -> dict[str, Any]:
+    """Prepare the same implementation stage after exact terminal adjudication."""
+    config = load_manifest(manifest_path)
+    workflow_id = config["workflow_id"]
+    config["_review_policy"] = _review_policy_from_history(config)
+    with RUNNER.STATE.project_submit_mutex(config["project_root"], timeout_seconds=30):
+        scope_path = _scope_path(config)
+        if scope_path.is_file():
+            scope = _json(scope_path)
+            if str(scope.get("active_workflow_id") or "") != workflow_id:
+                raise WorkflowError("terminal retry repair cannot take over another comprehensive workflow scope")
+        state_path = _state_path(config, workflow_id)
+        if not state_path.is_file():
+            raise WorkflowError("terminal retry repair requires the exact persisted workflow state")
+        stored = _json(state_path)
+        if stored.get("manifest_sha256") != config["manifest_sha256"]:
+            raise WorkflowError("workflow manifest changed before terminal retry repair")
+        if stored.get("status") != "attention_required":
+            raise WorkflowError("terminal retry repair requires workflow status attention_required")
+        stage = str(stored.get("current_stage") or "")
+        if stage != "implementation":
+            raise WorkflowError("terminal retry repair is restricted to the implementation stage")
+
+        attempt_id = str(stored.get("current_attempt_id") or "")
+        oracle_run_id = str(stored.get("oracle_run_id") or attempt_id)
+        if not attempt_id or oracle_run_id != attempt_id:
+            raise WorkflowError("terminal retry repair Oracle run identity mismatch")
+        run_dir_raw = Path(str(stored.get("oracle_run_dir") or "")).expanduser()
+        if not run_dir_raw.is_absolute():
+            raise WorkflowError("terminal retry repair requires an absolute Oracle run directory")
+        run_dir = run_dir_raw.resolve(strict=True)
+        run_state = RUNNER.STATE.load_state(run_dir / "state.json")
+        if str(run_state.get("run_id") or "") != attempt_id:
+            raise WorkflowError("terminal retry repair persisted run id mismatch")
+        if Path(str(run_state.get("project_root") or "")).resolve() != config["project_root"]:
+            raise WorkflowError("terminal retry repair project root mismatch")
+        if (
+            run_state.get("status") != "complete"
+            or run_state.get("session_authority") != "terminal"
+            or run_state.get("terminal_harvested") is not True
+            or run_state.get("transport_status") != "complete"
+        ):
+            raise WorkflowError("terminal retry repair requires a completed terminal harvest")
+        if run_state.get("task_outcome") != "not_executed":
+            raise WorkflowError("terminal retry repair requires task_outcome not_executed")
+
+        output = (run_dir / "output.md").resolve(strict=True)
+        try:
+            output.relative_to(run_dir)
+        except ValueError as exc:
+            raise WorkflowError("terminal retry repair output escaped the exact run directory") from exc
+        output_sha = sha(output)
+        if not output.read_bytes().strip() or run_state.get("artifact_sha256") != output_sha:
+            raise WorkflowError("terminal retry repair output hash mismatch")
+
+        source = _inside(
+            config["project_root"],
+            stored.get("current_binding_source_path") or stored.get("current_mission_path"),
+        )
+        source_sha = str(
+            stored.get("current_binding_source_sha256") or stored.get("current_input_sha256") or ""
+        )
+        if not source_sha or sha(source) != source_sha:
+            raise WorkflowError("terminal retry repair source mission hash mismatch")
+        augmented = _inside(config["project_root"], stored.get("current_augmented_mission_path"))
+        if sha(augmented) != str(stored.get("current_augmented_mission_sha256") or ""):
+            raise WorkflowError("terminal retry repair augmented mission hash mismatch")
+        receipt_path = _inside(config["project_root"], stored.get("receipt_path"), exists=False)
+        if receipt_path.exists():
+            raise WorkflowError("terminal retry repair refuses an existing receipt")
+
+        records = list(stored.get("records") or [])
+        records.append({
+            "stage": stage,
+            "attempt_id": attempt_id,
+            "run_dir": str(run_dir),
+            "terminal_output_sha256": output_sha,
+            "task_outcome": "not_executed",
+            "recovery": "same-workflow-stage-retry",
+        })
+        prepared = {
+            "schema": STATE_SCHEMA,
+            "status": "prepared",
+            "workflow_id": workflow_id,
+            "manifest_sha256": config["manifest_sha256"],
+            "next_stage": stage,
+            "next_mission_path": str(source),
+            "next_mission_sha256": source_sha,
+            "next_index": int(stored.get("next_index") or 0),
+            "records": records,
+            "terminal_retry_recovery": {
+                "prior_attempt_id": attempt_id,
+                "prior_run_dir": str(run_dir),
+                "prior_output_sha256": output_sha,
+                "task_outcome": "not_executed",
+            },
+        }
+        _write_workflow_state(state_path, config, prepared)
+        return {
+            "ok": True,
+            **prepared,
+            "state_path": str(state_path),
+            "safe_for_same_workflow_retry": True,
+            "web_submission_performed": False,
+        }
+
+
 def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run a bounded Oracle comprehensive workflow.")
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--repair-terminal-not-executed", action="store_true")
     args = parser.parse_args(argv)
     try:
-        value = run_workflow(args.manifest, dry_run=args.dry_run)
+        if args.dry_run and args.repair_terminal_not_executed:
+            raise WorkflowError("dry-run and repair actions are mutually exclusive")
+        value = (
+            repair_terminal_not_executed(args.manifest)
+            if args.repair_terminal_not_executed
+            else run_workflow(args.manifest, dry_run=args.dry_run)
+        )
     except Exception as exc:
         value = {"ok": False, "error": {"code": "ORACLE_COMPREHENSIVE_FAILED", "message": str(exc)}}
     print(json.dumps(value, ensure_ascii=False, indent=2))

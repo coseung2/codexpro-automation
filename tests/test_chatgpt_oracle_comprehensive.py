@@ -1859,3 +1859,129 @@ def test_awaiting_receipt_preserves_source_and_augmented_mission_bindings(tmp_pa
     assert result["current_binding_source_sha256"] == module.sha(source)
     assert result["current_augmented_mission_sha256"] == module.sha(augmented)
     assert result["current_binding_source_sha256"] != result["current_augmented_mission_sha256"]
+
+
+def _terminal_not_executed_implementation(module, tmp_path: Path):
+    manifest_path = manifest(tmp_path)
+    config = module.load_manifest(manifest_path)
+    config["_review_policy"] = module._default_review_policy()
+    config["_parallel_parent_id"] = "e" * 64
+    attempt_id = "d" * 32
+    source = tmp_path / "implementation-source.md"
+    source.write_text("Continue the reviewed implementation in the current workspace.", encoding="utf-8")
+    augmented, receipt, input_sha = module._stage_mission(
+        config, config["workflow_id"], 2, "implementation", source, attempt_id
+    )
+    oracle_manifest = module._oracle_manifest(
+        config, augmented, augmented.parent, attempt_id, stage="implementation"
+    )
+    oracle_config = module.RUNNER.STATE.load_manifest(oracle_manifest)
+    layout = module.RUNNER.STATE.create_layout(oracle_config, run_id=attempt_id)
+    layout.run_dir.mkdir(parents=True)
+    output = layout.run_dir / "output.md"
+    output.write_text("The implementation mission remains incomplete; no receipt was written.", encoding="utf-8")
+    run_state = module.RUNNER.STATE.state_payload(
+        oracle_config, layout, status="complete", resolved_version="test"
+    )
+    run_state.update({
+        "exit_code": 0,
+        "session_authority": "terminal",
+        "terminal_harvested": True,
+        "transport_status": "complete",
+        "task_outcome": "not_executed",
+        "task_outcome_reason": "terminal output proves the mission was incomplete",
+        "artifact_sha256": module.sha(output),
+    })
+    module.RUNNER.STATE.write_json_atomic(layout.state_path, run_state)
+    state_path = module._state_path(config, config["workflow_id"])
+    module._write_workflow_state(state_path, config, {
+        "schema": module.STATE_SCHEMA,
+        "status": "attention_required",
+        "workflow_id": config["workflow_id"],
+        "manifest_sha256": config["manifest_sha256"],
+        "current_stage": "implementation",
+        "current_attempt_id": attempt_id,
+        "current_input_sha256": input_sha,
+        "current_mission_path": str(source.resolve()),
+        "current_binding_source_path": str(source.resolve()),
+        "current_binding_source_sha256": input_sha,
+        "current_augmented_mission_path": str(augmented.resolve()),
+        "current_augmented_mission_sha256": module.sha(augmented),
+        "receipt_path": str(receipt.resolve()),
+        "oracle_run_id": attempt_id,
+        "oracle_run_dir": str(layout.run_dir.resolve()),
+        "next_index": 2,
+        "records": [{"stage": "implementation", "ok": False}],
+        "blocker": "exact recovery required",
+    })
+    return manifest_path, state_path, layout, source, receipt, run_state
+
+
+def test_terminal_not_executed_repair_prepares_same_implementation_without_web(tmp_path: Path) -> None:
+    module = load()
+    manifest_path, state_path, layout, source, receipt, _ = (
+        _terminal_not_executed_implementation(module, tmp_path)
+    )
+
+    repaired = module.repair_terminal_not_executed(manifest_path)
+    stored = module._json(state_path)
+
+    assert repaired["ok"] is True
+    assert repaired["safe_for_same_workflow_retry"] is True
+    assert repaired["web_submission_performed"] is False
+    assert stored["status"] == "prepared"
+    assert stored["next_stage"] == "implementation"
+    assert stored["next_mission_path"] == str(source.resolve())
+    assert stored["next_mission_sha256"] == module.sha(source)
+    assert stored["next_index"] == 2
+    assert not receipt.exists()
+    assert stored["terminal_retry_recovery"]["prior_run_dir"] == str(layout.run_dir.resolve())
+
+
+def test_dry_run_previews_prepared_implementation_without_changing_workflow_state(tmp_path: Path) -> None:
+    module = load()
+    manifest_path, state_path, _, _, _, _ = _terminal_not_executed_implementation(module, tmp_path)
+    module.repair_terminal_not_executed(manifest_path)
+    before = state_path.read_bytes()
+    previews = []
+
+    def fake_preview(oracle_manifest: Path, *, dry_run: bool):
+        payload = json.loads(oracle_manifest.read_text(encoding="utf-8"))
+        mission_text = Path(payload["mission_path"]).read_text(encoding="utf-8")
+        previews.append((dry_run, payload, mission_text))
+        return {"ok": True, "status": "dry-run"}
+
+    result = module.run_workflow(manifest_path, dry_run=True, oracle_execute=fake_preview)
+
+    assert result["stage"] == "implementation"
+    assert previews[0][0] is True
+    assert previews[0][1]["transport"] == "devspace"
+    assert "stage=implementation\n" in previews[0][2]
+    assert state_path.read_bytes() == before
+
+
+@pytest.mark.parametrize("field,value,error", [
+    ("task_outcome", "legacy_unclassified", "task_outcome not_executed"),
+    ("terminal_harvested", False, "completed terminal harvest"),
+    ("transport_status", "incomplete", "completed terminal harvest"),
+    ("artifact_sha256", "0" * 64, "output hash mismatch"),
+])
+def test_terminal_not_executed_repair_rejects_unproven_terminal_state(
+    tmp_path: Path, field: str, value, error: str
+) -> None:
+    module = load()
+    manifest_path, _, layout, _, _, run_state = _terminal_not_executed_implementation(module, tmp_path)
+    run_state[field] = value
+    module.RUNNER.STATE.write_json_atomic(layout.state_path, run_state)
+
+    with pytest.raises(module.WorkflowError, match=error):
+        module.repair_terminal_not_executed(manifest_path)
+
+
+def test_terminal_not_executed_repair_refuses_existing_receipt(tmp_path: Path) -> None:
+    module = load()
+    manifest_path, _, _, _, receipt, _ = _terminal_not_executed_implementation(module, tmp_path)
+    receipt.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(module.WorkflowError, match="refuses an existing receipt"):
+        module.repair_terminal_not_executed(manifest_path)

@@ -647,6 +647,34 @@ def test_windows_launch_uses_no_window_and_waits(tmp_path: Path) -> None:
     assert events == ["enter", "popen", "wait", "exit"]
 
 
+def test_existing_exact_owner_blocks_before_waiting_for_submit_mutex(tmp_path: Path) -> None:
+    runner = load_runner()
+    launched = []
+    owner = {"run_id": "owned-run", "lifecycle": "running"}
+    runner.STATE.unresolved_project_sessions = lambda *args, **kwargs: [owner]
+
+    def forbidden_mutex(*args, **kwargs):
+        raise AssertionError("submit mutex must not be entered while an exact owner is live")
+
+    def forbidden_popen(*args, **kwargs):
+        launched.append(True)
+        raise AssertionError("Oracle must not launch while an exact owner is live")
+
+    runner.STATE.project_submit_mutex = forbidden_mutex
+    result = execute_run(
+        runner,
+        manifest(tmp_path),
+        run_factory=version_runner,
+        popen_factory=forbidden_popen,
+    )
+
+    assert result["ok"] is False
+    assert result["result"]["status"] == "failed"
+    assert launched == []
+    stderr = Path(result["result"]["artifacts"]["stderr"]).read_text(encoding="utf-8")
+    assert "PROJECT_SESSION_STILL_LIVE" in stderr
+
+
 def test_transport_mission_change_blocks_before_oracle_launch(tmp_path: Path) -> None:
     runner = load_runner()
     launched = []
